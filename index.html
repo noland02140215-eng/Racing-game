@@ -3,21 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Racing Game</title>
+    <title>3D Racing Game - Ferrari 458</title>
     <style>
-        * { 
-            box-sizing: border-box; 
-            touch-action: none; 
-            -webkit-user-select: none; 
-            user-select: none; 
-        }
-        body { 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; 
-            background: #87ceeb; 
-            font-family: monospace; 
-        }
+        * { box-sizing: border-box; touch-action: none; -webkit-user-select: none; user-select: none; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #87ceeb; font-family: monospace; }
         
         #ui {
             position: absolute;
@@ -59,11 +48,7 @@
             pointer-events: none;
         }
 
-        .touch-group {
-            display: flex;
-            gap: 12px;
-            pointer-events: auto;
-        }
+        .touch-group { display: flex; gap: 12px; pointer-events: auto; }
 
         .btn {
             width: 65px;
@@ -100,9 +85,9 @@
             border: 1px solid #ff5555;
         }
     </style>
-    <!-- Three.js & GLTFLoader CDNs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 </head>
 <body>
     <div id="ui">
@@ -133,10 +118,6 @@
         };
 
         window.addEventListener('DOMContentLoaded', () => {
-            if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader === 'undefined') {
-                throw new Error("Three.js or GLTFLoader failed to load.");
-            }
-
             const keys = { w: false, s: false, a: false, d: false };
 
             function bindControl(elementId, keyName) {
@@ -157,7 +138,7 @@
             bindControl('btn-left', 'a');
             bindControl('btn-right', 'd');
 
-            // --- 1. SCENE SETUP ---
+            // --- 1. SCENE & LIGHTING SETUP ---
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87ceeb);
             scene.fog = new THREE.Fog(0x87ceeb, 50, 300);
@@ -189,31 +170,34 @@
             grid.position.y = 0.01;
             scene.add(grid);
 
-            // --- 2. CAR OBJECT & GLTF LOADING ---
+            // --- 2. FERRARI 458 MODEL LOADING ---
             const carGroup = new THREE.Group();
             scene.add(carGroup);
 
-            // Fallback Box (visible while GLTF model loads)
+            // Temporary Red Box while downloading
             const fallbackGeo = new THREE.BoxGeometry(2, 0.8, 4);
             const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
             let carModel = new THREE.Mesh(fallbackGeo, fallbackMat);
             carModel.position.y = 0.6;
             carGroup.add(carModel);
 
-            // Load External 3D Car Model (.gltf or .glb)
+            // Configure Draco & GLTF Loaders for Three.js example asset
+            const dracoLoader = new THREE.DRACOLoader();
+            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+
             const loader = new THREE.GLTFLoader();
-            // You can replace this URL with your hosted .glb or .gltf model file path
+            loader.setDRACOLoader(dracoLoader);
+
             const modelUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Ferrari458Italia/Ferrari458Italia.glb';
 
             loader.load(
                 modelUrl,
                 (gltf) => {
-                    carGroup.remove(carModel); // Remove fallback box
+                    carGroup.remove(carModel);
                     carModel = gltf.scene;
-                    
-                    // Center and scale imported model
-                    carModel.scale.set(1, 1, 1);
-                    carModel.rotation.y = Math.PI; // Align forward vector
+
+                    // Align rotation for driving direction
+                    carModel.rotation.y = Math.PI;
                     
                     carModel.traverse((child) => {
                         if (child.isMesh) {
@@ -226,30 +210,24 @@
                 },
                 undefined,
                 (error) => {
-                    console.warn("GLTF Model failed to load, keeping default box car.", error);
+                    console.warn("Ferrari GLTF model failed to load, keeping fallback box.", error);
                 }
             );
 
-            // --- 3. CAMERA MODES ---
+            // --- 3. CAMERA POSITIONS ---
             const cameraViews = [
-                { name: "Third-Person Chase", offset: new THREE.Vector3(0, 3.0, -8), lookAt: new THREE.Vector3(0, 0.8, 5) },
-                { name: "Interior Cockpit", offset: new THREE.Vector3(-0.35, 1.15, 0.3), lookAt: new THREE.Vector3(-0.35, 1.05, 10) },
-                { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 2.1), lookAt: new THREE.Vector3(0, 1.0, 15) }
+                { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.5, -7), lookAt: new THREE.Vector3(0, 0.8, 5) },
+                { name: "Interior Cockpit", offset: new THREE.Vector3(-0.35, 1.1, 0.2), lookAt: new THREE.Vector3(-0.35, 1.0, 10) },
+                { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 1.8), lookAt: new THREE.Vector3(0, 1.0, 15) }
             ];
             let currentCamIndex = 0;
 
-            function updateCameraMode() {
-                const activeView = cameraViews[currentCamIndex];
-                document.getElementById('cam-name').innerText = "Current Camera: " + activeView.name;
-            }
-
             function cycleCamera() {
                 currentCamIndex = (currentCamIndex + 1) % cameraViews.length;
-                updateCameraMode();
+                document.getElementById('cam-name').innerText = "Current Camera: " + cameraViews[currentCamIndex].name;
             }
 
             document.getElementById('cam-btn').addEventListener('click', cycleCamera);
-            updateCameraMode();
 
             window.addEventListener('keydown', (e) => {
                 const k = e.key.toLowerCase();
@@ -289,11 +267,23 @@
                 carGroup.position.x += Math.sin(angle) * speed;
                 carGroup.position.z += Math.cos(angle) * speed;
 
-                // Infinite ground tracking
                 ground.position.x = carGroup.position.x;
                 ground.position.z = carGroup.position.z;
                 grid.position.x = carGroup.position.x;
                 grid.position.z = carGroup.position.z;
 
                 const activeView = cameraViews[currentCamIndex];
-                const relativeCamOffset = activeView.offset.clone().applyAxisAngle(
+                const relativeCamOffset = activeView.offset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+                const relativeLookAt = activeView.lookAt.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+
+                camera.position.copy(carGroup.position).add(relativeCamOffset);
+                camera.lookAt(carGroup.position.clone().add(relativeLookAt));
+
+                renderer.render(scene, camera);
+            }
+
+            animate();
+        });
+    </script>
+</body>
+</html>
