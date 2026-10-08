@@ -15,7 +15,7 @@
             margin: 0; 
             padding: 0; 
             overflow: hidden; 
-            background: #000; 
+            background: #87ceeb; 
             font-family: monospace; 
         }
         
@@ -100,12 +100,14 @@
             border: 1px solid #ff5555;
         }
     </style>
+    <!-- Three.js & GLTFLoader CDNs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
     <div id="ui">
         <strong>3D Racing Game</strong><br>
-        <span id="cam-name">Current Camera: Interior Cockpit</span>
+        <span id="cam-name">Current Camera: Third-Person Chase</span>
     </div>
 
     <button id="cam-btn">CAM</button>
@@ -131,8 +133,8 @@
         };
 
         window.addEventListener('DOMContentLoaded', () => {
-            if (typeof THREE === 'undefined') {
-                throw new Error("Three.js library failed to load.");
+            if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader === 'undefined') {
+                throw new Error("Three.js or GLTFLoader failed to load.");
             }
 
             const keys = { w: false, s: false, a: false, d: false };
@@ -158,9 +160,8 @@
             // --- 1. SCENE SETUP ---
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87ceeb);
-            scene.fog = new THREE.Fog(0x87ceeb, 20, 150);
+            scene.fog = new THREE.Fog(0x87ceeb, 50, 300);
 
-            // Reduced near-clip distance from 0.1 to 0.01 to eliminate interior surface clipping
             const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.01, 1000);
             const renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -168,63 +169,77 @@
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
             scene.add(ambientLight);
 
-            const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            const sun = new THREE.DirectionalLight(0xffffff, 1.5);
             sun.position.set(50, 80, 50);
             sun.castShadow = true;
             scene.add(sun);
 
-            const groundGeo = new THREE.PlaneGeometry(300, 300);
+            // Ground & Infinite Grid Tracking
+            const groundGeo = new THREE.PlaneGeometry(1000, 1000);
             const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
             ground.receiveShadow = true;
             scene.add(ground);
 
-            const grid = new THREE.GridHelper(300, 60, 0xffffff, 0x555555);
+            const grid = new THREE.GridHelper(1000, 200, 0xffffff, 0x555555);
             grid.position.y = 0.01;
             scene.add(grid);
 
-            // --- 2. CAR MESHES ---
+            // --- 2. CAR OBJECT & GLTF LOADING ---
             const carGroup = new THREE.Group();
             scene.add(carGroup);
 
-            // Main Outer Shell
-            const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4);
-            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
-            const body = new THREE.Mesh(bodyGeo, bodyMat);
-            body.position.y = 0.6;
-            body.castShadow = true;
-            carGroup.add(body);
+            // Fallback Box (visible while GLTF model loads)
+            const fallbackGeo = new THREE.BoxGeometry(2, 0.8, 4);
+            const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
+            let carModel = new THREE.Mesh(fallbackGeo, fallbackMat);
+            carModel.position.y = 0.6;
+            carGroup.add(carModel);
 
-            // Dashboard
-            const dashGeo = new THREE.BoxGeometry(1.8, 0.3, 0.5);
-            const interiorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-            const dash = new THREE.Mesh(dashGeo, interiorMat);
-            dash.position.set(0, 0.85, 0.6);
-            carGroup.add(dash);
+            // Load External 3D Car Model (.gltf or .glb)
+            const loader = new THREE.GLTFLoader();
+            // You can replace this URL with your hosted .glb or .gltf model file path
+            const modelUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Ferrari458Italia/Ferrari458Italia.glb';
 
-            // Steering Wheel
-            const wheelGeo = new THREE.TorusGeometry(0.18, 0.025, 8, 24);
-            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-            const steeringWheel = new THREE.Mesh(wheelGeo, wheelMat);
-            steeringWheel.position.set(-0.35, 0.95, 0.4);
-            steeringWheel.rotation.x = Math.PI / 4;
-            carGroup.add(steeringWheel);
+            loader.load(
+                modelUrl,
+                (gltf) => {
+                    carGroup.remove(carModel); // Remove fallback box
+                    carModel = gltf.scene;
+                    
+                    // Center and scale imported model
+                    carModel.scale.set(1, 1, 1);
+                    carModel.rotation.y = Math.PI; // Align forward vector
+                    
+                    carModel.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
 
-            // --- 3. CAMERA POSITIONS ---
+                    carGroup.add(carModel);
+                },
+                undefined,
+                (error) => {
+                    console.warn("GLTF Model failed to load, keeping default box car.", error);
+                }
+            );
+
+            // --- 3. CAMERA MODES ---
             const cameraViews = [
-                { name: "Interior Cockpit", offset: new THREE.Vector3(-0.35, 1.25, 0.5), lookAt: new THREE.Vector3(-0.35, 1.1, 10), hideBody: true },
-                { name: "Third-Person Chase", offset: new THREE.Vector3(0, 3.0, -8), lookAt: new THREE.Vector3(0, 0.8, 5), hideBody: false },
-                { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 2.1), lookAt: new THREE.Vector3(0, 1.0, 15), hideBody: true }
+                { name: "Third-Person Chase", offset: new THREE.Vector3(0, 3.0, -8), lookAt: new THREE.Vector3(0, 0.8, 5) },
+                { name: "Interior Cockpit", offset: new THREE.Vector3(-0.35, 1.15, 0.3), lookAt: new THREE.Vector3(-0.35, 1.05, 10) },
+                { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 2.1), lookAt: new THREE.Vector3(0, 1.0, 15) }
             ];
             let currentCamIndex = 0;
 
             function updateCameraMode() {
                 const activeView = cameraViews[currentCamIndex];
-                body.visible = !activeView.hideBody;
                 document.getElementById('cam-name').innerText = "Current Camera: " + activeView.name;
             }
 
@@ -253,7 +268,7 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
 
-            // --- 4. RENDER LOOP ---
+            // --- 4. RENDER & PHYSICS LOOP ---
             let speed = 0, angle = 0;
             const maxSpeed = 0.6, accel = 0.015, friction = 0.96;
 
@@ -274,22 +289,11 @@
                 carGroup.position.x += Math.sin(angle) * speed;
                 carGroup.position.z += Math.cos(angle) * speed;
 
-                steeringWheel.rotation.z = keys.a ? 0.8 : (keys.d ? -0.8 : 0);
+                // Infinite ground tracking
+                ground.position.x = carGroup.position.x;
+                ground.position.z = carGroup.position.z;
+                grid.position.x = carGroup.position.x;
+                grid.position.z = carGroup.position.z;
 
                 const activeView = cameraViews[currentCamIndex];
-                body.visible = !activeView.hideBody;
-
-                const relativeCamOffset = activeView.offset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
-                const relativeLookAt = activeView.lookAt.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
-
-                camera.position.copy(carGroup.position).add(relativeCamOffset);
-                camera.lookAt(carGroup.position.clone().add(relativeLookAt));
-
-                renderer.render(scene, camera);
-            }
-
-            animate();
-        });
-    </script>
-</body>
-</html>
+                const relativeCamOffset = activeView.offset.clone().applyAxisAngle(
