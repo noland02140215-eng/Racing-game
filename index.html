@@ -3,10 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Racing Game - Ferrari 458</title>
+    <title>3D Racing Game</title>
     <style>
-        * { box-sizing: border-box; touch-action: none; -webkit-user-select: none; user-select: none; }
-        body { margin: 0; padding: 0; overflow: hidden; background: #87ceeb; font-family: monospace; }
+        * { 
+            box-sizing: border-box; 
+            touch-action: none; 
+            -webkit-user-select: none; 
+            user-select: none; 
+        }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background: #87ceeb; 
+            font-family: monospace; 
+        }
         
         #ui {
             position: absolute;
@@ -48,7 +59,11 @@
             pointer-events: none;
         }
 
-        .touch-group { display: flex; gap: 12px; pointer-events: auto; }
+        .touch-group {
+            display: flex;
+            gap: 12px;
+            pointer-events: auto;
+        }
 
         .btn {
             width: 65px;
@@ -85,6 +100,7 @@
             border: 1px solid #ff5555;
         }
     </style>
+    <!-- Three.js + Loaders -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
@@ -138,7 +154,7 @@
             bindControl('btn-left', 'a');
             bindControl('btn-right', 'd');
 
-            // --- 1. SCENE & LIGHTING SETUP ---
+            // --- 1. SCENE SETUP ---
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87ceeb);
             scene.fog = new THREE.Fog(0x87ceeb, 50, 300);
@@ -158,7 +174,7 @@
             sun.castShadow = true;
             scene.add(sun);
 
-            // Ground & Infinite Grid Tracking
+            // Ground & Infinite Grid
             const groundGeo = new THREE.PlaneGeometry(1000, 1000);
             const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
             const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -170,33 +186,32 @@
             grid.position.y = 0.01;
             scene.add(grid);
 
-            // --- 2. FERRARI 458 MODEL LOADING ---
+            // --- 2. MODEL LOADING ---
             const carGroup = new THREE.Group();
             scene.add(carGroup);
 
-            // Temporary Red Box while downloading
+            // Red Box Fallback Mesh
             const fallbackGeo = new THREE.BoxGeometry(2, 0.8, 4);
             const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
             let carModel = new THREE.Mesh(fallbackGeo, fallbackMat);
             carModel.position.y = 0.6;
             carGroup.add(carModel);
 
-            // Configure Draco & GLTF Loaders for Three.js example asset
+            // Draco & GLTF Configuration
             const dracoLoader = new THREE.DRACOLoader();
             dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
 
             const loader = new THREE.GLTFLoader();
             loader.setDRACOLoader(dracoLoader);
 
-            const modelUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Ferrari458Italia/Ferrari458Italia.glb';
+            // Relative path to uploaded repository asset
+            const modelUrl = './ferrari.glb';
 
             loader.load(
                 modelUrl,
                 (gltf) => {
-                    carGroup.remove(carModel);
+                    carGroup.remove(carModel); // Remove red box
                     carModel = gltf.scene;
-
-                    // Align rotation for driving direction
                     carModel.rotation.y = Math.PI;
                     
                     carModel.traverse((child) => {
@@ -210,11 +225,11 @@
                 },
                 undefined,
                 (error) => {
-                    console.warn("Ferrari GLTF model failed to load, keeping fallback box.", error);
+                    console.warn("Could not find ./ferrari.glb in repo root.", error);
                 }
             );
 
-            // --- 3. CAMERA POSITIONS ---
+            // --- 3. CAMERAS & CONTROLS ---
             const cameraViews = [
                 { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.5, -7), lookAt: new THREE.Vector3(0, 0.8, 5) },
                 { name: "Interior Cockpit", offset: new THREE.Vector3(-0.35, 1.1, 0.2), lookAt: new THREE.Vector3(-0.35, 1.0, 10) },
@@ -246,7 +261,7 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
 
-            // --- 4. RENDER & PHYSICS LOOP ---
+            // --- 4. GAME LOOP ---
             let speed = 0, angle = 0;
             const maxSpeed = 0.6, accel = 0.015, friction = 0.96;
 
