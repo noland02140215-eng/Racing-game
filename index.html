@@ -2,11 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>3D Racing Game</title>
     <style>
-        * { box-sizing: border-box; touch-action: manipulation; }
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: monospace; }
+        * { 
+            box-sizing: border-box; 
+            touch-action: none; 
+            -webkit-user-select: none; 
+            user-select: none; 
+        }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background: #000; 
+            font-family: monospace; 
+        }
+        
         #ui {
             position: absolute;
             top: 15px;
@@ -19,6 +31,61 @@
             z-index: 10;
             font-size: 13px;
         }
+        
+        #cam-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 20;
+            background: rgba(255, 255, 255, 0.25);
+            border: 2px solid #fff;
+            color: #fff;
+            font-weight: bold;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .touch-container {
+            position: absolute;
+            bottom: 25px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .touch-group {
+            display: flex;
+            gap: 12px;
+            pointer-events: auto;
+        }
+
+        .btn {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.6);
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .btn:active { background: rgba(255,255,255,0.5); }
+        .btn-green { background: rgba(34, 197, 94, 0.4); border-color: #22c55e; font-size: 14px; }
+        .btn-green:active { background: rgba(34, 197, 94, 0.8); }
+        .btn-red { background: rgba(239, 68, 68, 0.4); border-color: #ef4444; font-size: 13px; }
+        .btn-red:active { background: rgba(239, 68, 68, 0.8); }
+
         #error-log {
             position: absolute;
             bottom: 10px;
@@ -38,17 +105,27 @@
 </head>
 <body>
     <div id="ui">
-        <strong>3D Controls:</strong><br>
-        W / S : Gas / Reverse<br>
-        A / D : Steer<br>
-        C : Switch Camera<br>
+        <strong>3D Racing Game</strong><br>
         <span id="cam-name">Current Camera: Interior Cockpit</span>
+    </div>
+
+    <button id="cam-btn">CAM</button>
+
+    <div class="touch-container">
+        <div class="touch-group">
+            <button id="btn-left" class="btn">◀</button>
+            <button id="btn-right" class="btn">▶</button>
+        </div>
+        <div class="touch-group">
+            <button id="btn-brake" class="btn btn-red">BRAKE</button>
+            <button id="btn-gas" class="btn btn-green">GAS</button>
+        </div>
     </div>
 
     <div id="error-log"></div>
 
     <script>
-        // On-screen error catcher
+        // Error handling
         window.onerror = function(msg, url, line) {
             const log = document.getElementById('error-log');
             log.style.display = 'block';
@@ -59,6 +136,28 @@
             if (typeof THREE === 'undefined') {
                 throw new Error("Three.js library failed to load from CDN.");
             }
+
+            // Centralized Input State
+            const keys = { w: false, s: false, a: false, d: false };
+
+            // Touch & Pointer Controller
+            function bindControl(elementId, keyName) {
+                const btn = document.getElementById(elementId);
+                if (!btn) return;
+
+                const press = (e) => { e.preventDefault(); keys[keyName] = true; };
+                const release = (e) => { e.preventDefault(); keys[keyName] = false; };
+
+                btn.addEventListener('pointerdown', press);
+                btn.addEventListener('pointerup', release);
+                btn.addEventListener('pointerleave', release);
+                btn.addEventListener('pointercancel', release);
+            }
+
+            bindControl('btn-gas', 'w');
+            bindControl('btn-brake', 's');
+            bindControl('btn-left', 'a');
+            bindControl('btn-right', 'd');
 
             // --- 1. SCENE SETUP ---
             const scene = new THREE.Scene();
@@ -81,7 +180,7 @@
             sun.castShadow = true;
             scene.add(sun);
 
-            // Ground Track Surface
+            // Ground & Grid
             const groundGeo = new THREE.PlaneGeometry(300, 300);
             const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
             const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -89,16 +188,15 @@
             ground.receiveShadow = true;
             scene.add(ground);
 
-            // Grid lines on ground for motion reference
             const grid = new THREE.GridHelper(300, 60, 0xffffff, 0x555555);
             grid.position.y = 0.01;
             scene.add(grid);
 
-            // --- 2. CAR & INTERIOR ---
+            // --- 2. CAR & INTERIOR MESHES ---
             const carGroup = new THREE.Group();
             scene.add(carGroup);
 
-            // Car Body
+            // Exterior Body
             const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4);
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
             const body = new THREE.Mesh(bodyGeo, bodyMat);
@@ -106,7 +204,7 @@
             body.castShadow = true;
             carGroup.add(body);
 
-            // Interior Dashboard
+            // Dashboard
             const dashGeo = new THREE.BoxGeometry(1.8, 0.4, 0.6);
             const interiorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
             const dash = new THREE.Mesh(dashGeo, interiorMat);
@@ -130,24 +228,24 @@
 
             // --- 3. CAMERA POSITIONS ---
             const cameraViews = [
-                { name: "Interior Cockpit", offset: new THREE.Vector3(-0.4, 1.05, -0.1), lookAt: new THREE.Vector3(-0.4, 1.0, 10) },
-                { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.5, -7), lookAt: new THREE.Vector3(0, 0.8, 5) },
-                { name: "Hood Cam", offset: new THREE.Vector3(0, 1.0, 1.2), lookAt: new THREE.Vector3(0, 0.8, 15) }
+                { name: "Interior Cockpit", offset: new THREE.Vector3(-0.4, 1.25, 0.4), lookAt: new THREE.Vector3(-0.4, 1.1, 10) },
+                { name: "Third-Person Chase", offset: new THREE.Vector3(0, 3.0, -8), lookAt: new THREE.Vector3(0, 0.8, 5) },
+                { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 2.1), lookAt: new THREE.Vector3(0, 1.0, 15) }
             ];
             let currentCamIndex = 0;
 
-            // --- 4. INPUT & PHYSICS ---
-            const keys = { w: false, s: false, a: false, d: false };
-            let speed = 0, angle = 0;
-            const maxSpeed = 0.6, accel = 0.015, friction = 0.96;
+            function cycleCamera() {
+                currentCamIndex = (currentCamIndex + 1) % cameraViews.length;
+                document.getElementById('cam-name').innerText = "Current Camera: " + cameraViews[currentCamIndex].name;
+            }
 
+            document.getElementById('cam-btn').addEventListener('click', cycleCamera);
+
+            // Keyboard Fallback
             window.addEventListener('keydown', (e) => {
                 const k = e.key.toLowerCase();
                 if (k in keys) keys[k] = true;
-                if (k === 'c') {
-                    currentCamIndex = (currentCamIndex + 1) % cameraViews.length;
-                    document.getElementById('cam-name').innerText = "Current Camera: " + cameraViews[currentCamIndex].name;
-                }
+                if (k === 'c') cycleCamera();
             });
 
             window.addEventListener('keyup', (e) => {
@@ -161,7 +259,10 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
 
-            // --- 5. RENDER LOOP ---
+            // --- 4. RENDER & PHYSICS LOOP ---
+            let speed = 0, angle = 0;
+            const maxSpeed = 0.6, accel = 0.015, friction = 0.96;
+
             function animate() {
                 requestAnimationFrame(animate);
 
@@ -194,6 +295,5 @@
             animate();
         });
     </script>
-    <script src="mobile-controls.js"></script>
 </body>
 </html>
