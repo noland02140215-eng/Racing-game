@@ -100,7 +100,6 @@
             border: 1px solid #ff5555;
         }
     </style>
-    <!-- Three.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -125,7 +124,6 @@
     <div id="error-log"></div>
 
     <script>
-        // Error handling
         window.onerror = function(msg, url, line) {
             const log = document.getElementById('error-log');
             log.style.display = 'block';
@@ -134,13 +132,11 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             if (typeof THREE === 'undefined') {
-                throw new Error("Three.js library failed to load from CDN.");
+                throw new Error("Three.js library failed to load.");
             }
 
-            // Centralized Input State
             const keys = { w: false, s: false, a: false, d: false };
 
-            // Touch & Pointer Controller
             function bindControl(elementId, keyName) {
                 const btn = document.getElementById(elementId);
                 if (!btn) return;
@@ -159,7 +155,7 @@
             bindControl('btn-left', 'a');
             bindControl('btn-right', 'd');
 
-            // --- 1. SCENE SETUP ---
+            // --- SCENE SETUP ---
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87ceeb);
             scene.fog = new THREE.Fog(0x87ceeb, 20, 150);
@@ -171,7 +167,6 @@
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // Lighting
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
 
@@ -180,7 +175,6 @@
             sun.castShadow = true;
             scene.add(sun);
 
-            // Ground & Grid
             const groundGeo = new THREE.PlaneGeometry(300, 300);
             const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
             const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -192,11 +186,10 @@
             grid.position.y = 0.01;
             scene.add(grid);
 
-            // --- 2. CAR & INTERIOR MESHES ---
+            // --- CAR & INTERIOR ---
             const carGroup = new THREE.Group();
             scene.add(carGroup);
 
-            // Exterior Body
             const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4);
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
             const body = new THREE.Mesh(bodyGeo, bodyMat);
@@ -204,14 +197,12 @@
             body.castShadow = true;
             carGroup.add(body);
 
-            // Dashboard
             const dashGeo = new THREE.BoxGeometry(1.8, 0.4, 0.6);
             const interiorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
             const dash = new THREE.Mesh(dashGeo, interiorMat);
             dash.position.set(0, 0.8, 0.5);
             carGroup.add(dash);
 
-            // Steering Wheel
             const wheelGeo = new THREE.TorusGeometry(0.2, 0.03, 8, 24);
             const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
             const steeringWheel = new THREE.Mesh(wheelGeo, wheelMat);
@@ -219,29 +210,28 @@
             steeringWheel.rotation.x = Math.PI / 4;
             carGroup.add(steeringWheel);
 
-            // Windshield Frame
-            const frameGeo = new THREE.BoxGeometry(1.9, 0.6, 0.1);
-            const frameMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
-            const frame = new THREE.Mesh(frameGeo, frameMat);
-            frame.position.set(0, 1.2, 0.8);
-            carGroup.add(frame);
-
-            // --- 3. CAMERA POSITIONS ---
+            // --- CAMERA VIEWS ---
             const cameraViews = [
-                { name: "Interior Cockpit", offset: new THREE.Vector3(-0.4, 1.25, 0.4), lookAt: new THREE.Vector3(-0.4, 1.1, 10) },
-                { name: "Third-Person Chase", offset: new THREE.Vector3(0, 3.0, -8), lookAt: new THREE.Vector3(0, 0.8, 5) },
-                { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 2.1), lookAt: new THREE.Vector3(0, 1.0, 15) }
+                { name: "Interior Cockpit", offset: new THREE.Vector3(-0.4, 1.1, 0.2), lookAt: new THREE.Vector3(-0.4, 1.0, 10), hideBody: true },
+                { name: "Third-Person Chase", offset: new THREE.Vector3(0, 3.0, -8), lookAt: new THREE.Vector3(0, 0.8, 5), hideBody: false },
+                { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 2.1), lookAt: new THREE.Vector3(0, 1.0, 15), hideBody: true }
             ];
             let currentCamIndex = 0;
 
+            function updateCameraVisibility() {
+                const activeView = cameraViews[currentCamIndex];
+                body.visible = !activeView.hideBody;
+                document.getElementById('cam-name').innerText = "Current Camera: " + activeView.name;
+            }
+
             function cycleCamera() {
                 currentCamIndex = (currentCamIndex + 1) % cameraViews.length;
-                document.getElementById('cam-name').innerText = "Current Camera: " + cameraViews[currentCamIndex].name;
+                updateCameraVisibility();
             }
 
             document.getElementById('cam-btn').addEventListener('click', cycleCamera);
+            updateCameraVisibility();
 
-            // Keyboard Fallback
             window.addEventListener('keydown', (e) => {
                 const k = e.key.toLowerCase();
                 if (k in keys) keys[k] = true;
@@ -259,7 +249,7 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
 
-            // --- 4. RENDER & PHYSICS LOOP ---
+            // --- ANIMATION LOOP ---
             let speed = 0, angle = 0;
             const maxSpeed = 0.6, accel = 0.015, friction = 0.96;
 
