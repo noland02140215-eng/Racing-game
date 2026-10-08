@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D Racing Game - Interior & Camera System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Racing Game</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
         #ui {
@@ -11,14 +12,15 @@
             left: 20px;
             color: #fff;
             font-family: monospace;
-            font-size: 16px;
+            font-size: 14px;
             background: rgba(0, 0, 0, 0.6);
             padding: 12px;
             border-radius: 6px;
             pointer-events: none;
+            z-index: 10;
         }
     </style>
-    <!-- Three.js Library -->
+    <!-- Load Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -26,135 +28,13 @@
         <strong>Controls:</strong><br>
         W / S : Accelerate / Reverse<br>
         A / D : Steer Left / Right<br>
-        <strong>C : Switch Camera View</strong><br>
+        C : Switch Camera View<br>
         <span id="cam-name">Current Camera: Interior Cockpit</span>
     </div>
 
-    <script>
-        // --- 1. SCENE & RENDERER SETUP ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87ceeb); // Sky blue
-        scene.fog = new THREE.Fog(0x87ceeb, 20, 150);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        document.body.appendChild(renderer.domElement);
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-        sun.position.set(50, 80, 50);
-        sun.castShadow = true;
-        scene.add(sun);
-
-        // Ground Track Placeholder
-        const groundGeo = new THREE.PlaneGeometry(300, 300);
-        const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-        const ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        scene.add(ground);
-
-        // --- 2. CAR & INTERIOR BUILD ---
-        const carGroup = new THREE.Group();
-        scene.add(carGroup);
-
-        // Exterior Body
-        const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.y = 0.6;
-        body.castShadow = true;
-        carGroup.add(body);
-
-        // Dashboard (Interior)
-        const dashGeo = new THREE.BoxGeometry(1.8, 0.4, 0.6);
-        const interiorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-        const dash = new THREE.Mesh(dashGeo, interiorMat);
-        dash.position.set(0, 0.8, 0.5);
-        carGroup.add(dash);
-
-        // Steering Wheel (Interior)
-        const wheelGeo = new THREE.TorusGeometry(0.2, 0.03, 8, 24);
-        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-        const steeringWheel = new THREE.Mesh(wheelGeo, wheelMat);
-        steeringWheel.position.set(-0.4, 0.9, 0.2);
-        steeringWheel.rotation.x = Math.PI / 4;
-        carGroup.add(steeringWheel);
-
-        // Windshield Frame
-        const frameGeo = new THREE.BoxGeometry(1.9, 0.6, 0.1);
-        const frameMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
-        const frame = new THREE.Mesh(frameGeo, frameMat);
-        frame.position.set(0, 1.2, 0.8);
-        carGroup.add(frame);
-
-        // --- 3. CAMERA OPTIONS ---
-        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-
-        // Offsets relative to car's local origin: [X, Y, Z]
-        const cameraViews = [
-            {
-                name: "Interior Cockpit",
-                offset: new THREE.Vector3(-0.4, 1.05, -0.1), // Driver seat eye-level
-                lookAtOffset: new THREE.Vector3(-0.4, 1.0, 10)  // Looking forward down the road
-            },
-            {
-                name: "Third-Person Chase",
-                offset: new THREE.Vector3(0, 2.5, -7),        // Behind and above
-                lookAtOffset: new THREE.Vector3(0, 0.8, 5)
-            },
-            {
-                name: "Hood Cam",
-                offset: new THREE.Vector3(0, 1.0, 1.2),        // Front hood view
-                lookAtOffset: new THREE.Vector3(0, 0.8, 15)
-            }
-        ];
-
-        let currentCamIndex = 0;
-
-        // --- 4. CONTROLS & PHYSICS ---
-        const keys = { w: false, s: false, a: false, d: false };
-        let speed = 0;
-        let angle = 0;
-        const maxSpeed = 0.6;
-        const accel = 0.015;
-        const friction = 0.96;
-
-        window.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            if (key in keys) keys[key] = true;
-            if (key === 'c') {
-                currentCamIndex = (currentCamIndex + 1) % cameraViews.length;
-                document.getElementById('cam-name').innerText = "Current Camera: " + cameraViews[currentCamIndex].name;
-            }
-        });
-
-        window.addEventListener('keyup', (e) => {
-            const key = e.key.toLowerCase();
-            if (key in keys) keys[key] = false;
-        });
-
-        // Dynamic Resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // --- 5. GAME LOOP ---
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Driving physics
-            if (keys.w) speed = Math.min(speed + accel, maxSpeed);
-            if (keys.s) speed = Math.max(speed - accel, -maxSpeed / 2);
-            speed *= friction;
-
-            if (Math.abs(speed) > 0.001) {
-                const dir = speed > 0 ? 1 : -1;
-                if (keys.a) angle += 0.03 * dir;
-                if (keys.d) angle -=
+    <!-- Game Logic -->
+    <script src="main.js"></script>
+    <!-- Touch Controls -->
+    <script src="mobile-controls.js"></script>
+</body>
+</html>
