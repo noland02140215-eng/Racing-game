@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Racing Game - Drift & Soft Body</title>
+    <title>3D Racing Game - Realistic Speeds</title>
     <style>
         * { 
             box-sizing: border-box; 
@@ -33,20 +33,28 @@
             line-height: 1.5;
         }
         
-        #cam-btn {
+        .top-controls {
             position: absolute;
             top: 15px;
             right: 15px;
             z-index: 20;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .top-btn {
             background: rgba(255, 255, 255, 0.25);
             border: 2px solid #fff;
             color: #fff;
             font-weight: bold;
-            padding: 10px 16px;
+            padding: 10px 14px;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
+            backdrop-filter: blur(4px);
         }
+        .top-btn:active { background: rgba(255, 255, 255, 0.5); }
 
         .touch-container {
             position: absolute;
@@ -62,18 +70,19 @@
 
         .touch-group {
             display: flex;
-            gap: 12px;
+            gap: 10px;
+            align-items: center;
             pointer-events: auto;
         }
 
         .btn {
-            width: 65px;
-            height: 65px;
+            width: 62px;
+            height: 62px;
             border-radius: 50%;
             border: 2px solid rgba(255,255,255,0.6);
             background: rgba(255,255,255,0.2);
             color: #fff;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
             display: flex;
             align-items: center;
@@ -83,10 +92,12 @@
         }
 
         .btn:active { background: rgba(255,255,255,0.5); }
-        .btn-green { background: rgba(34, 197, 94, 0.4); border-color: #22c55e; font-size: 14px; }
+        .btn-green { background: rgba(34, 197, 94, 0.4); border-color: #22c55e; font-size: 13px; }
         .btn-green:active { background: rgba(34, 197, 94, 0.8); }
-        .btn-red { background: rgba(239, 68, 68, 0.4); border-color: #ef4444; font-size: 13px; }
+        .btn-red { background: rgba(239, 68, 68, 0.4); border-color: #ef4444; font-size: 12px; }
         .btn-red:active { background: rgba(239, 68, 68, 0.8); }
+        .btn-amber { background: rgba(245, 158, 11, 0.4); border-color: #f59e0b; font-size: 11px; }
+        .btn-amber:active { background: rgba(245, 158, 11, 0.85); }
 
         #error-log {
             position: absolute;
@@ -103,7 +114,6 @@
         }
     </style>
 
-    <!-- Modern Three.js ES Module Import Map -->
     <script type="importmap">
         {
             "imports": {
@@ -117,10 +127,14 @@
     <div id="ui">
         <strong>3D Racing Game</strong><br>
         <span id="cam-name">Camera: Third-Person Chase</span><br>
-        <span id="speed-display">Speed: 0 MPH</span>
+        <span id="speed-display">Speed: 0 MPH</span><br>
+        <span id="damage-display">Integrity: 100%</span>
     </div>
 
-    <button id="cam-btn">CAM</button>
+    <div class="top-controls">
+        <button id="cam-btn" class="top-btn">CAM</button>
+        <button id="repair-btn" class="top-btn">REPAIR [R]</button>
+    </div>
 
     <div class="touch-container">
         <div class="touch-group">
@@ -128,6 +142,7 @@
             <button id="btn-right" class="btn">▶</button>
         </div>
         <div class="touch-group">
+            <button id="btn-handbrake" class="btn btn-amber">DRIFT</button>
             <button id="btn-brake" class="btn btn-red">BRAKE</button>
             <button id="btn-gas" class="btn btn-green">GAS</button>
         </div>
@@ -147,7 +162,7 @@
         };
 
         // --- 1. CONTROLS SETUP ---
-        const keys = { w: false, s: false, a: false, d: false };
+        const keys = { w: false, s: false, a: false, d: false, space: false };
 
         function bindControl(elementId, keyName) {
             const btn = document.getElementById(elementId);
@@ -166,13 +181,14 @@
         bindControl('btn-brake', 's');
         bindControl('btn-left', 'a');
         bindControl('btn-right', 'd');
+        bindControl('btn-handbrake', 'space');
 
         // --- 2. SCENE & LIGHTING SETUP ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
-        scene.fog = new THREE.Fog(0x87ceeb, 60, 320);
+        scene.fog = new THREE.Fog(0x87ceeb, 80, 400);
 
-        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 1000);
         
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -189,8 +205,8 @@
         sun.shadow.mapSize.width = 1024;
         sun.shadow.mapSize.height = 1024;
         sun.shadow.camera.near = 10;
-        sun.shadow.camera.far = 200;
-        const shadowRange = 25;
+        sun.shadow.camera.far = 250;
+        const shadowRange = 40;
         sun.shadow.camera.left = -shadowRange;
         sun.shadow.camera.right = shadowRange;
         sun.shadow.camera.top = shadowRange;
@@ -199,8 +215,8 @@
         scene.add(sun.target);
 
         // Ground & Snapped Infinite Grid
-        const GRID_SIZE = 1000;
-        const GRID_DIVISIONS = 200;
+        const GRID_SIZE = 1200;
+        const GRID_DIVISIONS = 240;
         const CELL_SIZE = GRID_SIZE / GRID_DIVISIONS;
 
         const groundGeo = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE);
@@ -214,18 +230,111 @@
         grid.position.y = 0.01;
         scene.add(grid);
 
-        // --- 3. CAR & MODEL LOADING ---
+        // --- 3. CRASH OBSTACLES ---
+        const obstacles = [];
+        const barrierGeo = new THREE.BoxGeometry(3.2, 1.4, 1.4);
+        const barrierMatRed = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5 });
+        const barrierMatWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5 });
+
+        function spawnObstacles() {
+            const placements = [
+                { x: 0, z: 35 }, { x: 4, z: 35 }, { x: -4, z: 35 },
+                { x: 14, z: 65 }, { x: -14, z: 95 }, { x: 12, z: 130 },
+                { x: -18, z: 25 }, { x: 22, z: -20 }, { x: -25, z: -55 }
+            ];
+
+            placements.forEach((pos, idx) => {
+                const mesh = new THREE.Mesh(barrierGeo, idx % 2 === 0 ? barrierMatRed : barrierMatWhite);
+                mesh.position.set(pos.x, 0.7, pos.z);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+
+                obstacles.push({
+                    mesh,
+                    radius: 1.9,
+                    velocity: new THREE.Vector3(),
+                    angularVel: 0
+                });
+            });
+
+            for (let i = 0; i < 40; i++) {
+                const angle = (i / 40) * Math.PI * 2;
+                const dist = 50 + (i % 5) * 35;
+                const mesh = new THREE.Mesh(barrierGeo, i % 2 === 0 ? barrierMatRed : barrierMatWhite);
+                mesh.position.set(Math.cos(angle) * dist, 0.7, Math.sin(angle) * dist);
+                mesh.rotation.y = angle;
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+
+                obstacles.push({
+                    mesh,
+                    radius: 1.9,
+                    velocity: new THREE.Vector3(),
+                    angularVel: 0
+                });
+            }
+        }
+        spawnObstacles();
+
+        // --- 4. CAR & SOFT-BODY SETUP ---
         const carGroup = new THREE.Group();
         scene.add(carGroup);
 
-        // Red Box Fallback Mesh
-        const fallbackGeo = new THREE.BoxGeometry(2, 0.8, 4);
+        const fallbackGeo = new THREE.BoxGeometry(2, 0.8, 4, 6, 4, 10);
         const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
         let carModel = new THREE.Mesh(fallbackGeo, fallbackMat);
         carModel.position.y = 0.4;
         carModel.castShadow = true;
         carModel.receiveShadow = true;
         carGroup.add(carModel);
+
+        let softBodyMeshes = [];
+        let carIntegrity = 100;
+
+        function registerSoftBodyModel(rootObject) {
+            softBodyMeshes = [];
+            rootObject.updateMatrixWorld(true);
+
+            rootObject.traverse((child) => {
+                if (child.isMesh && child.geometry && child.geometry.attributes.position) {
+                    const posAttr = child.geometry.attributes.position;
+                    const originalPositions = new Float32Array(posAttr.array.length);
+                    originalPositions.set(posAttr.array);
+
+                    softBodyMeshes.push({
+                        mesh: child,
+                        originalPositions
+                    });
+                }
+            });
+        }
+        registerSoftBodyModel(carModel);
+
+        const cameraViews = [
+            { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.6, -7.5), lookAt: new THREE.Vector3(0, 0.7, 4) },
+            { name: "Driver Seat (FP)", offset: new THREE.Vector3(0.38, 0.92, -0.15), lookAt: new THREE.Vector3(0.38, 0.85, 12) },
+            { name: "Hood Cam", offset: new THREE.Vector3(0, 1.05, 1.3), lookAt: new THREE.Vector3(0, 0.95, 15) }
+        ];
+
+        function calibrateDriverCamera(model) {
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            const center = new THREE.Vector3();
+            box.getSize(size);
+            box.getCenter(center);
+
+            const driverX = center.x + size.x * 0.21;
+            const driverY = box.min.y + size.y * 0.69;
+            const driverZ = center.z + size.z * 0.04;
+
+            cameraViews[1].offset.set(driverX, driverY, driverZ);
+            cameraViews[1].lookAt.set(driverX, driverY - 0.06, driverZ + 14);
+
+            cameraViews[2].offset.set(center.x, box.min.y + size.y * 0.62, box.max.z - size.z * 0.28);
+            cameraViews[2].lookAt.set(center.x, box.min.y + size.y * 0.58, box.max.z + 14);
+        }
 
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
@@ -251,6 +360,8 @@
                 });
 
                 carGroup.add(carModel);
+                calibrateDriverCamera(carModel);
+                registerSoftBodyModel(carModel);
             },
             undefined,
             (error) => {
@@ -258,14 +369,73 @@
             }
         );
 
-        // --- 4. CAMERAS & INPUT LISTENERS ---
-        const cameraViews = [
-            { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.5, -7.0), lookAt: new THREE.Vector3(0, 0.7, 4) },
-            { name: "Driver Cockpit", offset: new THREE.Vector3(0, 1.1, -0.1), lookAt: new THREE.Vector3(0, 1.0, 10) },
-            { name: "Hood Cam", offset: new THREE.Vector3(0, 1.2, 1.6), lookAt: new THREE.Vector3(0, 1.0, 15) }
-        ];
-        let currentCamIndex = 0;
+        // --- 5. SOFT-BODY DEFORMATION & REPAIR ---
+        const damageDisplayEl = document.getElementById('damage-display');
 
+        function deformCarAtWorldPoint(worldImpactPoint, impactForce) {
+            const radius = 1.45;
+            const maxDent = Math.min(impactForce * 0.022, 0.45);
+            const localImpact = new THREE.Vector3();
+            const vertex = new THREE.Vector3();
+            const pushDir = new THREE.Vector3();
+
+            const carCenterWorld = carGroup.position.clone().add(new THREE.Vector3(0, 0.6, 0));
+
+            softBodyMeshes.forEach(({ mesh }) => {
+                const matName = (mesh.material && mesh.material.name) ? mesh.material.name.toLowerCase() : '';
+                const meshName = mesh.name.toLowerCase();
+                if (matName.includes('glass') || matName.includes('window') || meshName.includes('glass')) {
+                    return;
+                }
+
+                const posAttr = mesh.geometry.attributes.position;
+                localImpact.copy(worldImpactPoint);
+                mesh.worldToLocal(localImpact);
+
+                const localCenter = carCenterWorld.clone();
+                mesh.worldToLocal(localCenter);
+
+                let modified = false;
+                for (let i = 0; i < posAttr.count; i++) {
+                    vertex.fromBufferAttribute(posAttr, i);
+                    const dist = vertex.distanceTo(localImpact);
+
+                    if (dist < radius) {
+                        const falloff = Math.pow(1 - dist / radius, 2);
+                        pushDir.subVectors(localCenter, vertex).normalize();
+                        vertex.addScaledVector(pushDir, maxDent * falloff);
+                        vertex.y += (Math.sin(i * 12.9898) * 0.04) * falloff;
+
+                        posAttr.setXYZ(i, vertex.x, vertex.y, vertex.z);
+                        modified = true;
+                    }
+                }
+
+                if (modified) {
+                    posAttr.needsUpdate = true;
+                    mesh.geometry.computeVertexNormals();
+                }
+            });
+
+            carIntegrity = Math.max(0, Math.round(carIntegrity - impactForce * 0.65));
+            damageDisplayEl.innerText = `Integrity: ${carIntegrity}%`;
+        }
+
+        function repairCar() {
+            softBodyMeshes.forEach(({ mesh, originalPositions }) => {
+                const posAttr = mesh.geometry.attributes.position;
+                posAttr.array.set(originalPositions);
+                posAttr.needsUpdate = true;
+                mesh.geometry.computeVertexNormals();
+            });
+            carIntegrity = 100;
+            damageDisplayEl.innerText = `Integrity: 100%`;
+        }
+
+        document.getElementById('repair-btn').addEventListener('click', repairCar);
+
+        // --- 6. CAMERAS & INPUT LISTENERS ---
+        let currentCamIndex = 0;
         const camNameEl = document.getElementById('cam-name');
         const speedDisplayEl = document.getElementById('speed-display');
 
@@ -277,12 +447,22 @@
         document.getElementById('cam-btn').addEventListener('click', cycleCamera);
 
         window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                keys.space = true;
+                return;
+            }
             const k = e.key.toLowerCase();
             if (k in keys) keys[k] = true;
             if (k === 'c') cycleCamera();
+            if (k === 'r') repairCar();
         });
 
         window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                keys.space = false;
+                return;
+            }
             const k = e.key.toLowerCase();
             if (k in keys) keys[k] = false;
         });
@@ -293,19 +473,27 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // --- 5. DRIFT, SOFT BODY & GAME LOOP ---
+        // --- 7. REALISTIC PHYSICS & GAME LOOP ---
         const clock = new THREE.Clock();
         const yAxis = new THREE.Vector3(0, 1, 0);
 
-        let speed = 0;
+        let speed = 0; // stored in units/sec
         let angle = 0;
         let lateralVelocity = 0;
-        const maxSpeed = 45;
-        const accel = 26;
-        const brakeForce = 38;
-        const drag = 1.6;
-        const turnSpeed = 2.4;
-        const grip = 4.5;
+        let crashPitchImpulse = 0;
+        let crashRollImpulse = 0;
+        let screenShake = 0;
+
+        // REALISTIC VEHICLE SPEEDS:
+        // Conversion factor: ~22.37 units/sec equals ~50 MPH (unit scale: 1 unit ≈ 1 meter)
+        const UNITS_PER_MPH = 0.447; 
+        const maxSpeedMph = 165;
+        const maxSpeed = maxSpeedMph * UNITS_PER_MPH;           // ~73.8 units/sec
+        const accel = 14.5;                                      // Realistic sports car acceleration (0-60 in ~4.5s)
+        const brakeForce = 22.0;                                 // Strong stopping power
+        const baseDrag = 0.95;                                   // Natural aerodynamic rolling resistance
+        const baseTurnSpeed = 2.1;                               // Realistic steering response
+        const baseGrip = 5.5;
 
         function animate() {
             requestAnimationFrame(animate);
@@ -313,42 +501,109 @@
             const dt = Math.min(clock.getDelta(), 0.1);
             const time = clock.getElapsedTime();
 
-            if (keys.w) speed = Math.min(speed + accel * dt, maxSpeed);
-            if (keys.s) {
-                const force = speed > 0 ? brakeForce : accel;
-                speed = Math.max(speed - force * dt, -maxSpeed * 0.4);
+            const handbrakeActive = keys.space;
+
+            if (keys.w && !handbrakeActive) {
+                speed = Math.min(speed + accel * dt, maxSpeed);
+            } else if (keys.w && handbrakeActive) {
+                speed = Math.min(speed + accel * 0.4 * dt, maxSpeed * 0.8);
             }
 
-            speed *= Math.exp(-drag * dt);
+            if (keys.s) {
+                const force = speed > 0 ? brakeForce : accel;
+                speed = Math.max(speed - force * dt, -maxSpeed * 0.35);
+            }
+
+            const activeDrag = handbrakeActive ? 2.2 : baseDrag;
+            const activeTurnSpeed = handbrakeActive ? 3.2 : baseTurnSpeed;
+            const activeGrip = handbrakeActive ? 1.25 : baseGrip;
+            const slipMultiplier = handbrakeActive ? 0.58 : 0.28;
+
+            speed *= Math.exp(-activeDrag * dt);
             if (Math.abs(speed) < 0.05 && !keys.w && !keys.s) speed = 0;
 
             let steeringInput = 0;
             if (Math.abs(speed) > 0.2) {
                 const dir = speed > 0 ? 1 : -1;
-                const turnFactor = Math.min(Math.abs(speed) / 10, 1);
-                if (keys.a) { steeringInput = 1; angle += turnSpeed * turnFactor * dir * dt; }
-                if (keys.d) { steeringInput = -1; angle -= turnSpeed * turnFactor * dir * dt; }
+                // Speed-sensitive steering: tighter turning at low speeds, stable steering at high speeds
+                const turnFactor = Math.min(Math.abs(speed) / 14, 1);
+                if (keys.a) { steeringInput = 1; angle += activeTurnSpeed * turnFactor * dir * dt; }
+                if (keys.d) { steeringInput = -1; angle -= activeTurnSpeed * turnFactor * dir * dt; }
             }
 
             const forwardX = Math.sin(angle);
             const forwardZ = Math.cos(angle);
             
-            const targetLateral = steeringInput * (Math.abs(speed) * 0.35);
-            lateralVelocity += (targetLateral - lateralVelocity) * Math.min(grip * dt, 1);
+            const targetLateral = steeringInput * (Math.abs(speed) * slipMultiplier);
+            lateralVelocity += (targetLateral - lateralVelocity) * Math.min(activeGrip * dt, 1);
 
             carGroup.rotation.y = angle;
             carGroup.position.x += (forwardX * speed - Math.cos(angle) * lateralVelocity) * dt;
             carGroup.position.z += (forwardZ * speed + Math.sin(angle) * lateralVelocity) * dt;
 
-            const accelerationVal = keys.w ? 1 : (keys.s ? -1 : 0);
-            const bodyPitch = accelerationVal * 0.08 - (speed / maxSpeed) * 0.05;
-            const bodyRoll = -steeringInput * (Math.abs(speed) / maxSpeed) * 0.18 + (lateralVelocity * 0.03);
-            const suspensionBounce = Math.sin(time * 14) * (Math.abs(speed) / maxSpeed) * 0.03;
+            // --- COLLISION DETECTION & CRASH RESPONSE ---
+            const carRadius = 1.85;
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
 
-            // Set base height to 0.0 so tires rest on the ground plane
-            carModel.rotation.x = THREE.MathUtils.lerp(carModel.rotation.x, bodyPitch, 10 * dt);
-            carModel.rotation.z = THREE.MathUtils.lerp(carModel.rotation.z, bodyRoll, 10 * dt);
-            carModel.position.y = 0.0 + suspensionBounce;
+                if (obs.velocity.lengthSq() > 0.01) {
+                    obs.mesh.position.addScaledVector(obs.velocity, dt);
+                    obs.mesh.rotation.y += obs.angularVel * dt;
+                    obs.velocity.multiplyScalar(Math.exp(-4.5 * dt));
+                    obs.angularVel *= Math.exp(-4.5 * dt);
+                }
+
+                const dx = carGroup.position.x - obs.mesh.position.x;
+                const dz = carGroup.position.z - obs.mesh.position.z;
+                const distSq = dx * dx + dz * dz;
+                const minDist = carRadius + obs.radius;
+
+                if (distSq < minDist * minDist && distSq > 0.0001) {
+                    const dist = Math.sqrt(distSq);
+                    const overlap = minDist - dist;
+                    const nx = dx / dist;
+                    const nz = dz / dist;
+
+                    carGroup.position.x += nx * overlap * 0.6;
+                    carGroup.position.z += nz * overlap * 0.6;
+                    obs.mesh.position.x -= nx * overlap * 0.4;
+                    obs.mesh.position.z -= nz * overlap * 0.4;
+
+                    const impactSpeed = Math.abs(speed);
+                    if (impactSpeed > 3.0) {
+                        const contactPoint = new THREE.Vector3(
+                            obs.mesh.position.x + nx * obs.radius,
+                            0.55,
+                            obs.mesh.position.z + nz * obs.radius
+                        );
+
+                        deformCarAtWorldPoint(contactPoint, impactSpeed);
+
+                        obs.velocity.set(-nx * impactSpeed * 0.75, 0, -nz * impactSpeed * 0.75);
+                        obs.angularVel = (Math.random() - 0.5) * impactSpeed * 0.5;
+
+                        crashPitchImpulse = -0.2 * Math.min(impactSpeed / 30, 1.2);
+                        crashRollImpulse = (Math.random() - 0.5) * 0.25;
+                        screenShake = Math.min(impactSpeed * 0.01, 0.3);
+
+                        speed *= 0.35;
+                        lateralVelocity *= 0.25;
+                    }
+                }
+            }
+
+            crashPitchImpulse *= Math.exp(-9 * dt);
+            crashRollImpulse *= Math.exp(-9 * dt);
+            screenShake *= Math.exp(-12 * dt);
+
+            const accelerationVal = keys.w ? 1 : (keys.s || handbrakeActive ? -1 : 0);
+            const bodyPitch = accelerationVal * 0.06 - (speed / maxSpeed) * 0.035 + crashPitchImpulse;
+            const bodyRoll = -steeringInput * (Math.abs(speed) / maxSpeed) * 0.14 + (lateralVelocity * 0.022) + crashRollImpulse;
+            const suspensionBounce = Math.sin(time * 14) * (Math.abs(speed) / maxSpeed) * 0.02;
+
+            carModel.rotation.x = THREE.MathUtils.lerp(carModel.rotation.x, bodyPitch, 12 * dt);
+            carModel.rotation.z = THREE.MathUtils.lerp(carModel.rotation.z, bodyRoll, 12 * dt);
+            carModel.position.y = (softBodyMeshes[0]?.mesh === carModel ? 0.4 : 0.0) + suspensionBounce;
 
             ground.position.x = carGroup.position.x;
             ground.position.z = carGroup.position.z;
@@ -365,15 +620,27 @@
             const targetCamPos = carGroup.position.clone().add(relativeCamOffset);
             const targetLookAt = carGroup.position.clone().add(relativeLookAt);
 
-            const camLerpSpeed = currentCamIndex === 0 ? 8 : 20;
-            camera.position.lerp(targetCamPos, camLerpSpeed * dt);
-            
-            if (!window._currentLookAt) window._currentLookAt = targetLookAt.clone();
-            window._currentLookAt.lerp(targetLookAt, 20 * dt);
-            camera.lookAt(window._currentLookAt);
+            if (currentCamIndex === 0) {
+                camera.position.lerp(targetCamPos, 8 * dt);
+                if (!window._currentLookAt) window._currentLookAt = targetLookAt.clone();
+                window._currentLookAt.lerp(targetLookAt, 18 * dt);
+                camera.lookAt(window._currentLookAt);
+            } else {
+                camera.position.copy(targetCamPos);
+                camera.position.y += suspensionBounce * 0.6;
+                targetLookAt.y += bodyPitch * 4;
+                camera.lookAt(targetLookAt);
+                window._currentLookAt = targetLookAt.clone();
+            }
 
+            if (screenShake > 0.005) {
+                camera.position.x += (Math.random() - 0.5) * screenShake;
+                camera.position.y += (Math.random() - 0.5) * screenShake;
+            }
+
+            // Convert internal speed to MPH (1 unit/sec ≈ 2.237 MPH)
             const mph = Math.round(Math.abs(speed) * 2.237);
-            speedDisplayEl.innerText = `Speed: ${mph} MPH`;
+            speedDisplayEl.innerText = `Speed: ${mph} MPH${handbrakeActive ? ' [DRIFT]' : ''}`;
 
             renderer.render(scene, camera);
         }
