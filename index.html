@@ -222,7 +222,7 @@
         const fallbackGeo = new THREE.BoxGeometry(2, 0.8, 4);
         const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
         let carModel = new THREE.Mesh(fallbackGeo, fallbackMat);
-        carModel.position.y = 0.6;
+        carModel.position.y = 0.4;
         carModel.castShadow = true;
         carModel.receiveShadow = true;
         carGroup.add(carModel);
@@ -244,6 +244,9 @@
                     if (child.isMesh) {
                         child.castShadow = true;
                         child.receiveShadow = true;
+                        if (child.material) {
+                            child.material.side = THREE.DoubleSide;
+                        }
                     }
                 });
 
@@ -257,9 +260,9 @@
 
         // --- 4. CAMERAS & INPUT LISTENERS ---
         const cameraViews = [
-            { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.8, -7.5), lookAt: new THREE.Vector3(0, 0.9, 4) },
-            { name: "Interior Cockpit", offset: new THREE.Vector3(-0.35, 1.1, 0.2), lookAt: new THREE.Vector3(-0.35, 1.0, 10) },
-            { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 1.8), lookAt: new THREE.Vector3(0, 1.0, 15) }
+            { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.5, -7.0), lookAt: new THREE.Vector3(0, 0.7, 4) },
+            { name: "Driver Cockpit", offset: new THREE.Vector3(0, 1.1, -0.1), lookAt: new THREE.Vector3(0, 1.0, 10) },
+            { name: "Hood Cam", offset: new THREE.Vector3(0, 1.2, 1.6), lookAt: new THREE.Vector3(0, 1.0, 15) }
         ];
         let currentCamIndex = 0;
 
@@ -294,16 +297,15 @@
         const clock = new THREE.Clock();
         const yAxis = new THREE.Vector3(0, 1, 0);
 
-        // Physics parameters
         let speed = 0;
         let angle = 0;
-        let lateralVelocity = 0; // Enables drift / sliding
+        let lateralVelocity = 0;
         const maxSpeed = 45;
         const accel = 26;
         const brakeForce = 38;
         const drag = 1.6;
         const turnSpeed = 2.4;
-        const grip = 4.5;        // Lower = more drift slide, Higher = tighter grip
+        const grip = 4.5;
 
         function animate() {
             requestAnimationFrame(animate);
@@ -311,7 +313,6 @@
             const dt = Math.min(clock.getDelta(), 0.1);
             const time = clock.getElapsedTime();
 
-            // Throttle & Brake
             if (keys.w) speed = Math.min(speed + accel * dt, maxSpeed);
             if (keys.s) {
                 const force = speed > 0 ? brakeForce : accel;
@@ -321,7 +322,6 @@
             speed *= Math.exp(-drag * dt);
             if (Math.abs(speed) < 0.05 && !keys.w && !keys.s) speed = 0;
 
-            // Steering & Drift Physics
             let steeringInput = 0;
             if (Math.abs(speed) > 0.2) {
                 const dir = speed > 0 ? 1 : -1;
@@ -330,11 +330,9 @@
                 if (keys.d) { steeringInput = -1; angle -= turnSpeed * turnFactor * dir * dt; }
             }
 
-            // Calculate forward and sideways movement vectors for drift
             const forwardX = Math.sin(angle);
             const forwardZ = Math.cos(angle);
             
-            // Lateral slip (drift mechanics)
             const targetLateral = steeringInput * (Math.abs(speed) * 0.35);
             lateralVelocity += (targetLateral - lateralVelocity) * Math.min(grip * dt, 1);
 
@@ -342,27 +340,24 @@
             carGroup.position.x += (forwardX * speed - Math.cos(angle) * lateralVelocity) * dt;
             carGroup.position.z += (forwardZ * speed + Math.sin(angle) * lateralVelocity) * dt;
 
-            // Soft Body Dynamics (Suspension pitch, roll & bounce)
             const accelerationVal = keys.w ? 1 : (keys.s ? -1 : 0);
             const bodyPitch = accelerationVal * 0.08 - (speed / maxSpeed) * 0.05;
             const bodyRoll = -steeringInput * (Math.abs(speed) / maxSpeed) * 0.18 + (lateralVelocity * 0.03);
             const suspensionBounce = Math.sin(time * 14) * (Math.abs(speed) / maxSpeed) * 0.03;
 
+            // Set base height to 0.0 so tires rest on the ground plane
             carModel.rotation.x = THREE.MathUtils.lerp(carModel.rotation.x, bodyPitch, 10 * dt);
             carModel.rotation.z = THREE.MathUtils.lerp(carModel.rotation.z, bodyRoll, 10 * dt);
-            carModel.position.y = 0.6 + suspensionBounce;
+            carModel.position.y = 0.0 + suspensionBounce;
 
-            // Ground & Snapped Grid
             ground.position.x = carGroup.position.x;
             ground.position.z = carGroup.position.z;
             grid.position.x = Math.floor(carGroup.position.x / CELL_SIZE) * CELL_SIZE;
             grid.position.z = Math.floor(carGroup.position.z / CELL_SIZE) * CELL_SIZE;
 
-            // Directional Shadow Follow
             sun.position.set(carGroup.position.x + 30, 50, carGroup.position.z + 30);
             sun.target.position.copy(carGroup.position);
 
-            // Smooth Lagged Camera
             const activeView = cameraViews[currentCamIndex];
             const relativeCamOffset = activeView.offset.clone().applyAxisAngle(yAxis, angle);
             const relativeLookAt = activeView.lookAt.clone().applyAxisAngle(yAxis, angle);
@@ -370,16 +365,13 @@
             const targetCamPos = carGroup.position.clone().add(relativeCamOffset);
             const targetLookAt = carGroup.position.clone().add(relativeLookAt);
 
-            // Smoothly interpolate (lerp) camera position and look-at for organic motion lag
-            const camLerpSpeed = currentCamIndex === 0 ? 8 : 15; // Chase cam has more organic lag
+            const camLerpSpeed = currentCamIndex === 0 ? 8 : 20;
             camera.position.lerp(targetCamPos, camLerpSpeed * dt);
             
-            // Smooth look-at target
             if (!window._currentLookAt) window._currentLookAt = targetLookAt.clone();
-            window._currentLookAt.lerp(targetLookAt, 15 * dt);
+            window._currentLookAt.lerp(targetLookAt, 20 * dt);
             camera.lookAt(window._currentLookAt);
 
-            // Speedometer HUD
             const mph = Math.round(Math.abs(speed) * 2.237);
             speedDisplayEl.innerText = `Speed: ${mph} MPH`;
 
