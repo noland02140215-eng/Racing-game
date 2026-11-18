@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Racing Game</title>
+    <title>3D Racing Game - Drift & Soft Body</title>
     <style>
         * { 
             box-sizing: border-box; 
@@ -201,7 +201,7 @@
         // Ground & Snapped Infinite Grid
         const GRID_SIZE = 1000;
         const GRID_DIVISIONS = 200;
-        const CELL_SIZE = GRID_SIZE / GRID_DIVISIONS; // 5 units per cell
+        const CELL_SIZE = GRID_SIZE / GRID_DIVISIONS;
 
         const groundGeo = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE);
         const groundMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.9 });
@@ -227,7 +227,6 @@
         carModel.receiveShadow = true;
         carGroup.add(carModel);
 
-        // Draco & GLTF Configuration
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
 
@@ -258,7 +257,7 @@
 
         // --- 4. CAMERAS & INPUT LISTENERS ---
         const cameraViews = [
-            { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.5, -7), lookAt: new THREE.Vector3(0, 0.8, 5) },
+            { name: "Third-Person Chase", offset: new THREE.Vector3(0, 2.8, -7.5), lookAt: new THREE.Vector3(0, 0.9, 4) },
             { name: "Interior Cockpit", offset: new THREE.Vector3(-0.35, 1.1, 0.2), lookAt: new THREE.Vector3(-0.35, 1.0, 10) },
             { name: "Hood Cam", offset: new THREE.Vector3(0, 1.1, 1.8), lookAt: new THREE.Vector3(0, 1.0, 15) }
         ];
@@ -291,72 +290,96 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // --- 5. FRAME-RATE INDEPENDENT GAME LOOP ---
+        // --- 5. DRIFT, SOFT BODY & GAME LOOP ---
         const clock = new THREE.Clock();
         const yAxis = new THREE.Vector3(0, 1, 0);
 
-        // Physics constants (units per second)
+        // Physics parameters
         let speed = 0;
         let angle = 0;
-        const maxSpeed = 42;        // ~150 km/h or ~95 mph
-        const accel = 24;           // Acceleration rate
-        const brakeForce = 36;      // Braking / Reverse force
-        const drag = 1.8;           // Exponential friction damping
-        const turnSpeed = 2.1;      // Radians per second
+        let lateralVelocity = 0; // Enables drift / sliding
+        const maxSpeed = 45;
+        const accel = 26;
+        const brakeForce = 38;
+        const drag = 1.6;
+        const turnSpeed = 2.4;
+        const grip = 4.5;        // Lower = more drift slide, Higher = tighter grip
 
         function animate() {
             requestAnimationFrame(animate);
 
-            // Clamp delta to avoid huge physics jumps if the user switches browser tabs
             const dt = Math.min(clock.getDelta(), 0.1);
+            const time = clock.getElapsedTime();
 
-            // Acceleration & Braking
-            if (keys.w) {
-                speed = Math.min(speed + accel * dt, maxSpeed);
-            }
+            // Throttle & Brake
+            if (keys.w) speed = Math.min(speed + accel * dt, maxSpeed);
             if (keys.s) {
                 const force = speed > 0 ? brakeForce : accel;
                 speed = Math.max(speed - force * dt, -maxSpeed * 0.4);
             }
 
-            // Frame-rate independent exponential friction
             speed *= Math.exp(-drag * dt);
-            if (Math.abs(speed) < 0.05 && !keys.w && !keys.s) {
-                speed = 0;
-            }
+            if (Math.abs(speed) < 0.05 && !keys.w && !keys.s) speed = 0;
 
-            // Steering (scales smoothly at low speeds so the car doesn't spin in place)
-            if (Math.abs(speed) > 0.1) {
+            // Steering & Drift Physics
+            let steeringInput = 0;
+            if (Math.abs(speed) > 0.2) {
                 const dir = speed > 0 ? 1 : -1;
-                const turnFactor = Math.min(Math.abs(speed) / 8, 1);
-                if (keys.a) angle += turnSpeed * turnFactor * dir * dt;
-                if (keys.d) angle -= turnSpeed * turnFactor * dir * dt;
+                const turnFactor = Math.min(Math.abs(speed) / 10, 1);
+                if (keys.a) { steeringInput = 1; angle += turnSpeed * turnFactor * dir * dt; }
+                if (keys.d) { steeringInput = -1; angle -= turnSpeed * turnFactor * dir * dt; }
             }
 
-            // Update Car Transform
-            carGroup.rotation.y = angle;
-            carGroup.position.x += Math.sin(angle) * speed * dt;
-            carGroup.position.z += Math.cos(angle) * speed * dt;
+            // Calculate forward and sideways movement vectors for drift
+            const forwardX = Math.sin(angle);
+            const forwardZ = Math.cos(angle);
+            
+            // Lateral slip (drift mechanics)
+            const targetLateral = steeringInput * (Math.abs(speed) * 0.35);
+            lateralVelocity += (targetLateral - lateralVelocity) * Math.min(grip * dt, 1);
 
-            // Update Ground & Snap Grid to Cell Increments for Speed Illusion
+            carGroup.rotation.y = angle;
+            carGroup.position.x += (forwardX * speed - Math.cos(angle) * lateralVelocity) * dt;
+            carGroup.position.z += (forwardZ * speed + Math.sin(angle) * lateralVelocity) * dt;
+
+            // Soft Body Dynamics (Suspension pitch, roll & bounce)
+            const accelerationVal = keys.w ? 1 : (keys.s ? -1 : 0);
+            const bodyPitch = accelerationVal * 0.08 - (speed / maxSpeed) * 0.05;
+            const bodyRoll = -steeringInput * (Math.abs(speed) / maxSpeed) * 0.18 + (lateralVelocity * 0.03);
+            const suspensionBounce = Math.sin(time * 14) * (Math.abs(speed) / maxSpeed) * 0.03;
+
+            carModel.rotation.x = THREE.MathUtils.lerp(carModel.rotation.x, bodyPitch, 10 * dt);
+            carModel.rotation.z = THREE.MathUtils.lerp(carModel.rotation.z, bodyRoll, 10 * dt);
+            carModel.position.y = 0.6 + suspensionBounce;
+
+            // Ground & Snapped Grid
             ground.position.x = carGroup.position.x;
             ground.position.z = carGroup.position.z;
             grid.position.x = Math.floor(carGroup.position.x / CELL_SIZE) * CELL_SIZE;
             grid.position.z = Math.floor(carGroup.position.z / CELL_SIZE) * CELL_SIZE;
 
-            // Keep Directional Shadow Frustum Centered on Car
+            // Directional Shadow Follow
             sun.position.set(carGroup.position.x + 30, 50, carGroup.position.z + 30);
             sun.target.position.copy(carGroup.position);
 
-            // Update Camera
+            // Smooth Lagged Camera
             const activeView = cameraViews[currentCamIndex];
             const relativeCamOffset = activeView.offset.clone().applyAxisAngle(yAxis, angle);
             const relativeLookAt = activeView.lookAt.clone().applyAxisAngle(yAxis, angle);
 
-            camera.position.copy(carGroup.position).add(relativeCamOffset);
-            camera.lookAt(carGroup.position.clone().add(relativeLookAt));
+            const targetCamPos = carGroup.position.clone().add(relativeCamOffset);
+            const targetLookAt = carGroup.position.clone().add(relativeLookAt);
 
-            // Update Speedometer UI
+            // Smoothly interpolate (lerp) camera position and look-at for organic motion lag
+            const camLerpSpeed = currentCamIndex === 0 ? 8 : 15; // Chase cam has more organic lag
+            camera.position.lerp(targetCamPos, camLerpSpeed * dt);
+            
+            // Smooth look-at target
+            if (!window._currentLookAt) window._currentLookAt = targetLookAt.clone();
+            window._currentLookAt.lerp(targetLookAt, 15 * dt);
+            camera.lookAt(window._currentLookAt);
+
+            // Speedometer HUD
             const mph = Math.round(Math.abs(speed) * 2.237);
             speedDisplayEl.innerText = `Speed: ${mph} MPH`;
 
