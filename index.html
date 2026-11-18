@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Racing Game - Realistic Speeds</title>
+    <title>3D Racing Game - Sakura Highway</title>
     <style>
         * { 
             box-sizing: border-box; 
@@ -11,12 +11,14 @@
             -webkit-user-select: none; 
             user-select: none; 
         }
-        body { 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; 
-            background: #87ceeb; 
-            font-family: monospace; 
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #ffd9e8;
+            font-family: monospace;
+            overscroll-behavior: none;
+            overscroll-behavior-x: none;
         }
         
         #ui {
@@ -125,7 +127,7 @@
 </head>
 <body>
     <div id="ui">
-        <strong>3D Racing Game</strong><br>
+        <strong>3D Racing Game — Sakura Highway</strong><br>
         <span id="cam-name">Camera: Third-Person Chase</span><br>
         <span id="speed-display">Speed: 0 MPH</span><br>
         <span id="damage-display">Integrity: 100%</span>
@@ -161,6 +163,15 @@
             log.innerHTML = `<strong>Error:</strong> ${msg} (Line ${line})`;
         };
 
+        // touch-action: none on * and overscroll-behavior on html/body stop most
+        // edge-swipe-back gestures, but some mobile browsers (notably some
+        // Android WebViews) still start a navigation gesture from a raw
+        // touchmove before touch-action is honored. Belt-and-suspenders: eat
+        // every non-UI touchmove/gesture at the document level.
+        document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+        document.addEventListener('gesturestart', (e) => { e.preventDefault(); });
+        document.addEventListener('dblclick', (e) => { e.preventDefault(); });
+
         // --- 1. CONTROLS SETUP ---
         const keys = { w: false, s: false, a: false, d: false, space: false };
 
@@ -183,12 +194,13 @@
         bindControl('btn-right', 'd');
         bindControl('btn-handbrake', 'space');
 
-        // --- 2. SCENE & LIGHTING SETUP ---
+        // --- 2. SCENE & LIGHTING SETUP (Sakura Highway theme) ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87ceeb);
-        scene.fog = new THREE.Fog(0x87ceeb, 80, 400);
+        const SKY_COLOR = 0xffd9e8;
+        scene.background = new THREE.Color(SKY_COLOR);
+        scene.fog = new THREE.Fog(SKY_COLOR, 90, 480);
 
-        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 1000);
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 1200);
         
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -197,10 +209,10 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+        const ambientLight = new THREE.AmbientLight(0xfff0e0, 1.3);
         scene.add(ambientLight);
 
-        const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+        const sun = new THREE.DirectionalLight(0xffe9c7, 2.2);
         sun.castShadow = true;
         sun.shadow.mapSize.width = 1024;
         sun.shadow.mapSize.height = 1024;
@@ -214,27 +226,148 @@
         scene.add(sun);
         scene.add(sun.target);
 
-        // Ground & Snapped Infinite Grid
+        // Ground & Snapped Infinite Grid (asphalt road through a grassy field)
         const GRID_SIZE = 1200;
         const GRID_DIVISIONS = 240;
         const CELL_SIZE = GRID_SIZE / GRID_DIVISIONS;
 
         const groundGeo = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE);
-        const groundMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.9 });
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x4a5a3c, roughness: 0.95 });
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        const grid = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0xffffff, 0x555555);
+        // Dark asphalt road strip that rides with the car
+        const roadGeo = new THREE.PlaneGeometry(16, GRID_SIZE);
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2e, roughness: 0.85 });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        road.position.y = 0.005;
+        road.receiveShadow = true;
+        scene.add(road);
+
+        const grid = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0xffffff, 0x8a8a8a);
         grid.position.y = 0.01;
         scene.add(grid);
 
-        // --- 3. CRASH OBSTACLES ---
+        // --- 2b. JAPAN-INSPIRED SET DRESSING ---
+
+        // Mount Fuji backdrop (static, very far away)
+        function buildFuji() {
+            const group = new THREE.Group();
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x5c6b7a, roughness: 1 });
+            const snowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+
+            const base = new THREE.Mesh(new THREE.ConeGeometry(230, 260, 48), baseMat);
+            base.position.y = 130;
+            group.add(base);
+
+            const cap = new THREE.Mesh(new THREE.ConeGeometry(95, 95, 48), snowMat);
+            cap.position.y = 230;
+            group.add(cap);
+
+            group.position.set(60, 0, 560);
+            group.traverse(c => { if (c.isMesh) c.receiveShadow = false; });
+            return group;
+        }
+        scene.add(buildFuji());
+
+        // Cherry blossom trees scattered along both sides of the road (instanced for perf)
+        function buildCherryBlossoms() {
+            const TREE_COUNT = 160;
+            const trunkGeo = new THREE.CylinderGeometry(0.18, 0.26, 2.2, 6);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5b3a29, roughness: 0.9 });
+            const blossomGeo = new THREE.IcosahedronGeometry(1.15, 1);
+            const blossomMat = new THREE.MeshStandardMaterial({ color: 0xffb6d5, roughness: 0.8, flatShading: true });
+
+            const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, TREE_COUNT);
+            const blossoms = new THREE.InstancedMesh(blossomGeo, blossomMat, TREE_COUNT);
+            trunks.castShadow = true;
+            blossoms.castShadow = true;
+
+            const dummy = new THREE.Object3D();
+            for (let i = 0; i < TREE_COUNT; i++) {
+                const side = i % 2 === 0 ? 1 : -1;
+                const x = side * (11 + Math.random() * 45);
+                const z = -80 + Math.random() * 700;
+                const scale = 0.8 + Math.random() * 0.6;
+
+                dummy.position.set(x, 1.1 * scale, z);
+                dummy.scale.set(scale, scale, scale);
+                dummy.rotation.y = Math.random() * Math.PI;
+                dummy.updateMatrix();
+                trunks.setMatrixAt(i, dummy.matrix);
+
+                dummy.position.set(x, 2.3 * scale, z);
+                dummy.updateMatrix();
+                blossoms.setMatrixAt(i, dummy.matrix);
+            }
+            trunks.instanceMatrix.needsUpdate = true;
+            blossoms.instanceMatrix.needsUpdate = true;
+
+            const group = new THREE.Group();
+            group.add(trunks, blossoms);
+            return group;
+        }
+        scene.add(buildCherryBlossoms());
+
+        // Torii gates straddling the road at intervals
+        function buildToriiGate(z) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: 0xcc3b2c, roughness: 0.6 });
+            const capMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.6 });
+
+            const legGeo = new THREE.CylinderGeometry(0.45, 0.55, 7.5, 12);
+            const legL = new THREE.Mesh(legGeo, mat);
+            legL.position.set(-6.5, 3.75, 0);
+            const legR = new THREE.Mesh(legGeo, mat);
+            legR.position.set(6.5, 3.75, 0);
+
+            const topBeam = new THREE.Mesh(new THREE.BoxGeometry(15.5, 0.6, 1.2), mat);
+            topBeam.position.set(0, 7.6, 0);
+            const topCap = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.45, 1.6), capMat);
+            topCap.position.set(0, 8.05, 0);
+            const underBeam = new THREE.Mesh(new THREE.BoxGeometry(13.5, 0.4, 0.8), mat);
+            underBeam.position.set(0, 6.5, 0);
+
+            group.add(legL, legR, topBeam, topCap, underBeam);
+            group.position.set(0, 0, z);
+            group.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+            return group;
+        }
+        [40, 160, 290, 420, 560].forEach(z => scene.add(buildToriiGate(z)));
+
+        // Stone lanterns lining the roadside
+        function buildLantern(x, z) {
+            const group = new THREE.Group();
+            const stoneMat = new THREE.MeshStandardMaterial({ color: 0x8c8c86, roughness: 1 });
+            const glowMat = new THREE.MeshStandardMaterial({ color: 0xffcf7a, emissive: 0xff9d2e, emissiveIntensity: 0.9, roughness: 0.5 });
+
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.3, 8), stoneMat);
+            const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.1, 8), stoneMat);
+            pillar.position.y = 0.7;
+            const box = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), glowMat);
+            box.position.y = 1.4;
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.4, 4), stoneMat);
+            roof.rotation.y = Math.PI / 4;
+            roof.position.y = 1.85;
+
+            group.add(base, pillar, box, roof);
+            group.position.set(x, 0, z);
+            group.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+            return group;
+        }
+        for (let z = 0; z < 650; z += 24) {
+            scene.add(buildLantern(9.5, z));
+            scene.add(buildLantern(-9.5, z + 12));
+        }
+
+        // --- 3. CRASH OBSTACLES (restyled as wooden crates / stone blocks) ---
         const obstacles = [];
         const barrierGeo = new THREE.BoxGeometry(3.2, 1.4, 1.4);
-        const barrierMatRed = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5 });
-        const barrierMatWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5 });
+        const barrierMatWood = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.85 });
+        const barrierMatStone = new THREE.MeshStandardMaterial({ color: 0x9a9690, roughness: 0.95 });
 
         function spawnObstacles() {
             const placements = [
@@ -244,7 +377,7 @@
             ];
 
             placements.forEach((pos, idx) => {
-                const mesh = new THREE.Mesh(barrierGeo, idx % 2 === 0 ? barrierMatRed : barrierMatWhite);
+                const mesh = new THREE.Mesh(barrierGeo, idx % 2 === 0 ? barrierMatWood : barrierMatStone);
                 mesh.position.set(pos.x, 0.7, pos.z);
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
@@ -261,7 +394,7 @@
             for (let i = 0; i < 40; i++) {
                 const angle = (i / 40) * Math.PI * 2;
                 const dist = 50 + (i % 5) * 35;
-                const mesh = new THREE.Mesh(barrierGeo, i % 2 === 0 ? barrierMatRed : barrierMatWhite);
+                const mesh = new THREE.Mesh(barrierGeo, i % 2 === 0 ? barrierMatWood : barrierMatStone);
                 mesh.position.set(Math.cos(angle) * dist, 0.7, Math.sin(angle) * dist);
                 mesh.rotation.y = angle;
                 mesh.castShadow = true;
@@ -282,16 +415,80 @@
         const carGroup = new THREE.Group();
         scene.add(carGroup);
 
-        const fallbackGeo = new THREE.BoxGeometry(2, 0.8, 4, 6, 4, 10);
-        const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
-        let carModel = new THREE.Mesh(fallbackGeo, fallbackMat);
-        carModel.position.y = 0.4;
-        carModel.castShadow = true;
-        carModel.receiveShadow = true;
+        // Procedural fallback car — built entirely from primitives, so the page
+        // looks like a real car even when opened standalone with no ferrari.glb
+        // next to it (e.g. a raw HTML file shared on its own, or the model
+        // failing to load). If ferrari.glb loads successfully, it replaces this.
+        function buildProceduralCar() {
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.35, metalness: 0.35 });
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.4, metalness: 0.15 });
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.4, metalness: 0.7 });
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fd4ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.55 });
+            const headlightMat = new THREE.MeshStandardMaterial({ color: 0xfffbe0, emissive: 0xfff2a8, emissiveIntensity: 0.7 });
+            const taillightMat = new THREE.MeshStandardMaterial({ color: 0xff3b3b, emissive: 0xff0000, emissiveIntensity: 0.5 });
+
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.55, 4.2, 6, 3, 10), bodyMat);
+            body.position.y = 0.5;
+
+            const hood = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.22, 1.3, 4, 2, 4), bodyMat);
+            hood.position.set(0, 0.76, 1.35);
+
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.5, 1.8, 4, 3, 5), cabinMat);
+            cabin.position.set(0, 0.95, -0.2);
+
+            const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.45, 0.06), glassMat);
+            windshield.name = 'windshield_glass';
+            windshield.position.set(0, 0.93, 0.78);
+            windshield.rotation.x = -0.35;
+
+            const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.42, 0.06), glassMat);
+            rearGlass.name = 'rear_glass';
+            rearGlass.position.set(0, 0.9, -1.1);
+            rearGlass.rotation.x = 0.4;
+
+            group.add(body, hood, cabin, windshield, rearGlass);
+
+            const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 16);
+            const rimGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.34, 8);
+            const wheelPositions = [
+                [-0.98, 0.42, 1.35], [0.98, 0.42, 1.35],
+                [-0.98, 0.42, -1.35], [0.98, 0.42, -1.35]
+            ];
+            wheelPositions.forEach((p) => {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(...p);
+                const rim = new THREE.Mesh(rimGeo, rimMat);
+                rim.rotation.z = Math.PI / 2;
+                rim.position.set(...p);
+                group.add(wheel, rim);
+            });
+
+            [[-0.72, 0.55, 2.08], [0.72, 0.55, 2.08]].forEach((p) => {
+                const h = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), headlightMat);
+                h.position.set(...p);
+                group.add(h);
+            });
+            [[-0.72, 0.55, -2.08], [0.72, 0.55, -2.08]].forEach((p) => {
+                const t = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.08), taillightMat);
+                t.position.set(...p);
+                group.add(t);
+            });
+
+            group.traverse((c) => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+            return group;
+        }
+
+        let carModel = buildProceduralCar();
         carGroup.add(carModel);
 
         let softBodyMeshes = [];
         let carIntegrity = 100;
+        // Scale-aware reference used to size dents correctly no matter how the
+        // imported model is scaled (fixes dents being invisible or absurdly large).
+        let carScaleRef = 1.4;
 
         function registerSoftBodyModel(rootObject) {
             softBodyMeshes = [];
@@ -299,6 +496,13 @@
 
             rootObject.traverse((child) => {
                 if (child.isMesh && child.geometry && child.geometry.attributes.position) {
+                    // Soft-body deformation needs per-vertex normals that are not
+                    // shared across unrelated triangles, and it needs real normals
+                    // to exist at all before the first hit.
+                    if (!child.geometry.attributes.normal) {
+                        child.geometry.computeVertexNormals();
+                    }
+
                     const posAttr = child.geometry.attributes.position;
                     const originalPositions = new Float32Array(posAttr.array.length);
                     originalPositions.set(posAttr.array);
@@ -325,6 +529,10 @@
             box.getSize(size);
             box.getCenter(center);
 
+            // Scale-aware dent radius: ~28% of the car's largest dimension,
+            // clamped to sane bounds so tiny or huge imports both dent visibly.
+            carScaleRef = THREE.MathUtils.clamp(Math.max(size.x, size.y, size.z), 0.6, 8);
+
             const driverX = center.x + size.x * 0.21;
             const driverY = box.min.y + size.y * 0.69;
             const driverZ = center.z + size.z * 0.04;
@@ -335,6 +543,11 @@
             cameraViews[2].offset.set(center.x, box.min.y + size.y * 0.62, box.max.z - size.z * 0.28);
             cameraViews[2].lookAt.set(center.x, box.min.y + size.y * 0.58, box.max.z + 14);
         }
+
+        // Calibrate cameras and dent-scale against the procedural car right away,
+        // so driver/hood cams and crash deformation are correct even if
+        // ferrari.glb never loads at all.
+        calibrateDriverCamera(carModel);
 
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
@@ -369,17 +582,20 @@
             }
         );
 
-        // --- 5. SOFT-BODY DEFORMATION & REPAIR ---
+        // --- 5. SOFT-BODY DEFORMATION & REPAIR (rewritten) ---
         const damageDisplayEl = document.getElementById('damage-display');
+        const _v = new THREE.Vector3();
+        const _n = new THREE.Vector3();
+        const _localImpact = new THREE.Vector3();
 
         function deformCarAtWorldPoint(worldImpactPoint, impactForce) {
-            const radius = 1.45;
-            const maxDent = Math.min(impactForce * 0.022, 0.45);
-            const localImpact = new THREE.Vector3();
-            const vertex = new THREE.Vector3();
-            const pushDir = new THREE.Vector3();
+            // Radius and dent depth now scale with the actual loaded model size,
+            // so dents are always visible instead of being too small/large.
+            const radius = Math.max(carScaleRef * 0.42, 0.8);
+            const maxDent = Math.min(impactForce * 0.03, carScaleRef * 0.22);
+            const seed = impactForce * 13.37 + worldImpactPoint.x;
 
-            const carCenterWorld = carGroup.position.clone().add(new THREE.Vector3(0, 0.6, 0));
+            let anyModified = false;
 
             softBodyMeshes.forEach(({ mesh }) => {
                 const matName = (mesh.material && mesh.material.name) ? mesh.material.name.toLowerCase() : '';
@@ -389,24 +605,33 @@
                 }
 
                 const posAttr = mesh.geometry.attributes.position;
-                localImpact.copy(worldImpactPoint);
-                mesh.worldToLocal(localImpact);
+                const normAttr = mesh.geometry.attributes.normal;
 
-                const localCenter = carCenterWorld.clone();
-                mesh.worldToLocal(localCenter);
+                _localImpact.copy(worldImpactPoint);
+                mesh.worldToLocal(_localImpact);
 
                 let modified = false;
                 for (let i = 0; i < posAttr.count; i++) {
-                    vertex.fromBufferAttribute(posAttr, i);
-                    const dist = vertex.distanceTo(localImpact);
+                    _v.fromBufferAttribute(posAttr, i);
+                    const dist = _v.distanceTo(_localImpact);
 
                     if (dist < radius) {
                         const falloff = Math.pow(1 - dist / radius, 2);
-                        pushDir.subVectors(localCenter, vertex).normalize();
-                        vertex.addScaledVector(pushDir, maxDent * falloff);
-                        vertex.y += (Math.sin(i * 12.9898) * 0.04) * falloff;
 
-                        posAttr.setXYZ(i, vertex.x, vertex.y, vertex.z);
+                        // Push the vertex inward along its OWN surface normal —
+                        // this is what actually reads as a dent/crumple, unlike
+                        // pushing everything toward the car's center.
+                        _n.fromBufferAttribute(normAttr, i).normalize();
+                        _v.addScaledVector(_n, -maxDent * falloff);
+
+                        // Small crinkle jitter so the panel doesn't look like a
+                        // perfectly smooth dish.
+                        const j = Math.sin(i * 12.9898 + seed) * 0.5;
+                        _v.x += j * 0.025 * falloff;
+                        _v.y += Math.cos(i * 78.233 + seed) * 0.5 * 0.025 * falloff;
+                        _v.z += Math.sin(i * 37.719 + seed) * 0.5 * 0.025 * falloff;
+
+                        posAttr.setXYZ(i, _v.x, _v.y, _v.z);
                         modified = true;
                     }
                 }
@@ -414,11 +639,15 @@
                 if (modified) {
                     posAttr.needsUpdate = true;
                     mesh.geometry.computeVertexNormals();
+                    mesh.geometry.computeBoundingSphere();
+                    anyModified = true;
                 }
             });
 
-            carIntegrity = Math.max(0, Math.round(carIntegrity - impactForce * 0.65));
-            damageDisplayEl.innerText = `Integrity: ${carIntegrity}%`;
+            if (anyModified) {
+                carIntegrity = Math.max(0, Math.round(carIntegrity - impactForce * 0.65));
+                damageDisplayEl.innerText = `Integrity: ${carIntegrity}%`;
+            }
         }
 
         function repairCar() {
@@ -427,6 +656,7 @@
                 posAttr.array.set(originalPositions);
                 posAttr.needsUpdate = true;
                 mesh.geometry.computeVertexNormals();
+                mesh.geometry.computeBoundingSphere();
             });
             carIntegrity = 100;
             damageDisplayEl.innerText = `Integrity: 100%`;
@@ -485,15 +715,20 @@
         let screenShake = 0;
 
         // REALISTIC VEHICLE SPEEDS:
-        // Conversion factor: ~22.37 units/sec equals ~50 MPH (unit scale: 1 unit ≈ 1 meter)
         const UNITS_PER_MPH = 0.447; 
         const maxSpeedMph = 165;
         const maxSpeed = maxSpeedMph * UNITS_PER_MPH;           // ~73.8 units/sec
-        const accel = 14.5;                                      // Realistic sports car acceleration (0-60 in ~4.5s)
-        const brakeForce = 22.0;                                 // Strong stopping power
-        const baseDrag = 0.95;                                   // Natural aerodynamic rolling resistance
-        const baseTurnSpeed = 2.1;                               // Realistic steering response
+        const accel = 14.5;
+        const brakeForce = 22.0;
+        const baseDrag = 0.95;
+        const baseTurnSpeed = 2.1;
         const baseGrip = 5.5;
+
+        // World boundary: past this radius from the origin the car bounces
+        // back instead of driving into the distance forever. Sized to sit just
+        // past the lantern-lined road and Fuji backdrop so it feels like the
+        // edge of the playable valley rather than an arbitrary wall.
+        const BOUNDARY_RADIUS = 580;
 
         function animate() {
             requestAnimationFrame(animate);
@@ -525,7 +760,6 @@
             let steeringInput = 0;
             if (Math.abs(speed) > 0.2) {
                 const dir = speed > 0 ? 1 : -1;
-                // Speed-sensitive steering: tighter turning at low speeds, stable steering at high speeds
                 const turnFactor = Math.min(Math.abs(speed) / 14, 1);
                 if (keys.a) { steeringInput = 1; angle += activeTurnSpeed * turnFactor * dir * dt; }
                 if (keys.d) { steeringInput = -1; angle -= activeTurnSpeed * turnFactor * dir * dt; }
@@ -592,6 +826,21 @@
                 }
             }
 
+            // --- WORLD BOUNDARY ---
+            const distFromCenterSq = carGroup.position.x * carGroup.position.x + carGroup.position.z * carGroup.position.z;
+            if (distFromCenterSq > BOUNDARY_RADIUS * BOUNDARY_RADIUS) {
+                const distFromCenter = Math.sqrt(distFromCenterSq);
+                const nx = carGroup.position.x / distFromCenter;
+                const nz = carGroup.position.z / distFromCenter;
+                carGroup.position.x = nx * BOUNDARY_RADIUS;
+                carGroup.position.z = nz * BOUNDARY_RADIUS;
+
+                speed *= -0.3;
+                lateralVelocity *= -0.3;
+                crashPitchImpulse = -0.12;
+                screenShake = Math.max(screenShake, 0.16);
+            }
+
             crashPitchImpulse *= Math.exp(-9 * dt);
             crashRollImpulse *= Math.exp(-9 * dt);
             screenShake *= Math.exp(-12 * dt);
@@ -607,6 +856,7 @@
 
             ground.position.x = carGroup.position.x;
             ground.position.z = carGroup.position.z;
+            road.position.z = carGroup.position.z;
             grid.position.x = Math.floor(carGroup.position.x / CELL_SIZE) * CELL_SIZE;
             grid.position.z = Math.floor(carGroup.position.z / CELL_SIZE) * CELL_SIZE;
 
@@ -638,7 +888,6 @@
                 camera.position.y += (Math.random() - 0.5) * screenShake;
             }
 
-            // Convert internal speed to MPH (1 unit/sec ≈ 2.237 MPH)
             const mph = Math.round(Math.abs(speed) * 2.237);
             speedDisplayEl.innerText = `Speed: ${mph} MPH${handbrakeActive ? ' [DRIFT]' : ''}`;
 
